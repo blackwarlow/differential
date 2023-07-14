@@ -1,3 +1,29 @@
+"""
+MIT License
+
+Copyright (c) 2023 Nikita Belomestnykh
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+"""
+
+from __future__ import annotations
+
 import math
 import operator
 import re
@@ -8,6 +34,7 @@ from typing_extensions import Self
 
 @unique
 class TokenType(Enum):
+    """Фиксированное описание всех возможных типов нод парсера"""
     T_VR1 = auto()
     T_VR2 = auto()
     T_NUM = auto()
@@ -26,8 +53,10 @@ class TokenType(Enum):
     T_END = auto()
 
 
+# Список унарных операций
 UNARY = [TokenType.T_NEG]
 
+# Маппинг токенов на типы нод
 TOKEN_MAP = {
     "(": TokenType.T_LPR,
     ")": TokenType.T_RPR,
@@ -45,8 +74,10 @@ TOKEN_MAP = {
     "e": TokenType.T_E,
 }
 
+# Обратный маппинг
 TOKEN_MAP_REV = {v: k for k, v in TOKEN_MAP.items()}
 
+# Маппинг операторов
 OPERATIONS = {
     TokenType.T_ADD: operator.add,
     TokenType.T_NEG: operator.neg,
@@ -58,38 +89,49 @@ OPERATIONS = {
 
 
 class LexerError(Exception):
+    """Базовая ошибка лексера"""
     pass
 
 
 class NoEquationError(LexerError):
+    """Ошибка лексера - отсутствие уравнения"""
     pass
 
 
 class NoArgumentError(LexerError):
+    """Ошибка лексера - нет аргумента х"""
     pass
 
 
 class NoODEError(LexerError):
+    """Ошибка лексера - уравнение не ОДУ"""
     pass
 
 
 class NoDifferentialError(LexerError):
+    """Ошибка лексера - нет производной"""
     pass
 
 
 class UndefinedLexem(LexerError):
+    """Ошибка лексера - неизвестная лексема"""
     pass
 
 
 class ParserError(Exception):
+    """Ошибка парсера"""
     pass
 
 
 class EvaluateError(Exception):
+    """Ошибка вычисления"""
     pass
 
 
 class Node:
+    """
+    Класс ноды ast-дерева математического выражения
+    """
     def __init__(
         self, token_type: TokenType, value: str = None, children: list[Self] = []
     ) -> Self:
@@ -98,12 +140,14 @@ class Node:
         self.value: str = value
 
     def find(self, token_type: TokenType) -> bool:
+        """Рекурсивный поиск ноды среди детей"""
         return (
             any(c.find(token_type) for c in self.children)
             or self.token_type == token_type
         )
 
     def path(self, token_type: TokenType) -> bool:
+        """Рекурсивный путь к ноде"""
         if self.token_type == token_type:
             return []
         for i, c in enumerate(self.children):
@@ -113,6 +157,7 @@ class Node:
         return None
 
     def _path(self, token_type: TokenType, index: int) -> bool:
+        """Обработка поиска пути""""
         if self.token_type == token_type:
             return [index]
         for i, c in enumerate(self.children):
@@ -122,12 +167,14 @@ class Node:
         return None
 
     def navigate(self, path: list[int]) -> Self:
+        """Прохождение по ast-дереву вглубь"""
         if len(path) == 0:
             return self
         index = path.pop(0)
         return self.children[index].navigate(path)
 
     def reverse(self, path: list[int], second: Self) -> Self:
+        """Обработка решения дерева относительно указанной ноды"""
         item_prev = self
         while len(path) > 0:
             index = path.pop(0)
@@ -216,6 +263,7 @@ class Node:
         return second
 
     def compute(self, x: float, y: float) -> float:
+        """Вычислить результат ОДУ"""
         if self.token_type == TokenType.T_DIF:
             print(self)
             raise EvaluateError(
@@ -238,6 +286,7 @@ class Node:
             return OPERATIONS[self.token_type](left, right)
 
     def to_string(self, placeholders: bool = False):
+        """Привести ast-дерево к строке"""
         s: str = ""
         if self.token_type == TokenType.T_DIF:
             raise EvaluateError(
@@ -259,6 +308,7 @@ class Node:
         return s
 
     def __str__(self) -> str:
+        """Строковое представление объекта"""
         return "Node({}, {}{})".format(
             self.token_type,
             self.value,
@@ -277,6 +327,7 @@ class Node:
 
 
 def ast_equ(ts: list[Node]) -> Node:
+    """Оператор равенства"""
     l_n = ast_sum(ts)
     while check(ts, TokenType.T_EQU):
         n = consume(ts)
@@ -287,6 +338,7 @@ def ast_equ(ts: list[Node]) -> Node:
 
 
 def ast_sum(ts: list[Node]) -> Node:
+    """Оператор суммы"""
     l_n = ast_mul(ts)
     while check(ts, [TokenType.T_ADD, TokenType.T_NEG]):
         n = consume(ts)
@@ -299,6 +351,7 @@ def ast_sum(ts: list[Node]) -> Node:
 
 
 def ast_mul(ts: list[Node]) -> Node:
+    """Оператор умножения"""
     l_n = ast_pow(ts)
     while check(ts, [TokenType.T_MUL, TokenType.T_DIV]):
         n = consume(ts)
@@ -309,6 +362,7 @@ def ast_mul(ts: list[Node]) -> Node:
 
 
 def ast_pow(ts: list[Node]) -> Node:
+    """Оператор степени"""
     l_n = ast_fun(ts)
     while check(ts, [TokenType.T_POW]):
         n = consume(ts)
@@ -327,6 +381,7 @@ def ast_fun(ts: list[Node]) -> Node:
 
 
 def ast_val(ts: list[Node]) -> Node:
+    """Оператор производной"""
     if check(ts, TokenType.T_VR1):
         n = consume(ts)
         if check(ts, TokenType.T_DIF):
@@ -366,6 +421,7 @@ def ast_val(ts: list[Node]) -> Node:
 
 
 def match(ts: list[Node], exp: TokenType) -> Node:
+    """Нахождение совпадения"""
     if check(ts, exp):
         return consume(ts)
     else:
@@ -373,16 +429,19 @@ def match(ts: list[Node], exp: TokenType) -> Node:
 
 
 def consume(ts: list[Node]) -> Node:
+    """Удаление ноды из списка"""
     return ts.pop(0)
 
 
 def check(ts: list[Node], exp: TokenType | list[TokenType]):
+    """Проверка соответствия ноды указанной/ым"""
     if isinstance(exp, list):
         return ts[0].token_type in exp
     return ts[0].token_type == exp
 
 
 def lex_analyse(s: str) -> list:
+    """Провести лексемный анализ выражения"""
     s = s.lower()
     ts = []
 
@@ -421,6 +480,7 @@ def lex_analyse(s: str) -> list:
 
 
 def reorder(tk: Node) -> Node:
+    """Переобпределить выражения для решения ОДУ"""
     # Find in which half of equasion y' is located at
     r: bool = tk.children[1].find(TokenType.T_DIF)
     pr = tk.children[r]
@@ -431,6 +491,7 @@ def reorder(tk: Node) -> Node:
 
 
 def parse(s: str) -> Node:
+    """Выполнить парсинг выражения"""
     ts: list[Node] = lex_analyse("".join(s.split()))
     ast = ast_equ(ts)
     match(ts, TokenType.T_END)
